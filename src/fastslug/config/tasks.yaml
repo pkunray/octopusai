@@ -1,0 +1,30 @@
+analyze_code_for_bugs:
+  description: >
+    First, clone the GitHub repository from {repository_url}. Then scan through all files 
+    in the cloned repository and identify potential bugs, security vulnerabilities, and code quality issues.
+    Use your expertise to determine which files contain code, configuration, or build scripts that could have issues.
+    Focus on common programming mistakes, unsafe patterns, logical errors, configuration problems, and security vulnerabilities.
+    Analyze any file type you determine is relevant - source code, config files, build files, scripts, etc.
+  expected_output: >
+    A detailed list of identified issues including:
+    - File path and line number
+    - Bug type and severity (High/Medium/Low)
+    - Description of the issue
+    - Potential impact
+    - Code snippet showing the problem
+  agent: bug_detective
+
+compile_bug_report:
+  description: >
+    Take the bug analysis results and compile them into a clear, organized report.
+    Prioritize issues by severity, group similar bugs together, and provide actionable
+    recommendations for fixing each issue.
+  expected_output: >
+    A comprehensive bug report in markdown format containing:
+    - Executive summary with total bug counts
+    - High priority issues that need immediate attention
+    - Medium and low priority issues organized by category
+    - Recommended fixes for each bug type
+    - Overall code quality assessment
+  agent: report_compiler
+  output_file: bug_report.md
