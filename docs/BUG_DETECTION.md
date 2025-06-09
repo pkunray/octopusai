@@ -70,3 +70,8 @@ The expected outcome for this task was the identification of a logical error. Th
 >   ```
 
 In summary, the success rate for this task was **33%**, with only one out of three executions yielding the correct diagnosis.
+
+## TODO
+
+Create a Developer agent that, based on the bug report, creates a bug-fix branch, implements the code fix, and opens a pull request. (Github Operation Tools)
+Create a QA agent that, tests the fix solution from the developer agent. (Computer use Tool)
