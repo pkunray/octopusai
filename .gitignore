@@ -174,3 +174,5 @@ cython_debug/
 .pypirc
 
 *.pem
+
+.DS_Store
