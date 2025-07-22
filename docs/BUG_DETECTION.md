@@ -24,7 +24,7 @@ Output: bug_report.md
 1. **Run the analysis:**
 
    ```bash
-   cd /src/fastslug && uv run bug_detection_crew.py
+   cd /src/octopusai && uv run bug_detection_crew.py
    ```
 
 2. **Enter a GitHub repository URL when prompted:**

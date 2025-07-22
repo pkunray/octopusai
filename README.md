@@ -1,30 +1,12 @@
-## FastSlug - An Extensible AI Agent System
-FastSlug is an extensible AI agent platform that intelligently selects and coordinates specialized AI agents to handle users' requests.
-
-```mermaid
-flowchart TD
-    UserRequest["User Request"]
-    Secretary["Secretary Agent"]
-    Candidates["Agent Candidates"]
-    Selected["Selected Agents"]
-    Result["Result"]
-
-    UserRequest --> Secretary
-    Secretary -- Selection --> Candidates
-    Secretary -- Delegation --> Selected
-    Selected --> Result
-    Result -.->|User Feedback| Secretary
-```
-
-*Figure: Overview of the FastSlug agent selection and coordination process.*
-
+## OctopusAI
+OctopusAI contains many AI agents.
 
 ## Install
 
 **To install from PyPI(once available), run:**
 
 ```bash
-   pip install fastslug
+   pip install octopusai
 ```
 
 ## Setup
@@ -39,5 +21,5 @@ flowchart TD
 
 To view all available commands, run:
 ```bash
-   fastslug --help
+   octopusai --help
 ```
