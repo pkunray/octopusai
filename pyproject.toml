@@ -13,7 +13,8 @@ dependencies = [
     "crewai_tools>=0.55.0",
     "gitpython>=3.1.44",
     "python-dotenv>=1.1.0",
-    "pypdfium2==4.30.0"
+    "pypdfium2==4.30.0",
+    "pygithub>=2.6.1",
 ]
 
 [project.scripts]
