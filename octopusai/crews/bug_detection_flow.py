@@ -15,6 +15,7 @@ class FlowState(BaseModel):
     repo_dir: str | None = None
     pr_details: dict | None = None
     pr_diff: str | None = None
+    pr_branch: str | None = None
     code_review_results: str | None = None
 
 
@@ -35,8 +36,10 @@ class BugDetectionFlow(Flow[FlowState]):
     def get_pr_details(self):
         pr = langchain_gh.GetPullRequest()
         pr_details = pr._run(repo=self.state.repo, pr_number=self.state.pr_number)
+        pr_branch = f"pr-{self.state.pr_number}"
         print(f"Pull Request Details: {pr_details}")
         self.state.pr_details = pr_details
+        self.state.pr_branch = pr_branch
         return pr_details
 
     @listen(get_pr_details)
@@ -52,7 +55,7 @@ class BugDetectionFlow(Flow[FlowState]):
     def get_pr_diff(self):
         print(f"Getting diff for PR: {self.state.pr_number}")
         git = git_tool.Diff()
-        diff = git._run(repo_dir=self.state.repo_dir, pr_number=self.state.pr_number, incremental=True)
+        diff = git._run(repo_dir=self.state.repo_dir, pr_number=self.state.pr_number, pr_branch=self.state.pr_branch, incremental=True)
         print(f"{'>' * 30 } Diff {'>' * 30 }")
         print(diff)
         print(f"{'<' * 30 } Diff {'<' * 30 }")
@@ -61,6 +64,14 @@ class BugDetectionFlow(Flow[FlowState]):
     
     #### @listen(clone_repository)
     #### def get_repo_languages(self):
+
+    @listen(clone_repository)
+    def checkout_pr_branch(self):
+        print(f"Checking out PR branch: {self.state.pr_branch}")
+        git = git_tool.Checkout()
+        git._run(repo_dir=self.state.repo_dir, branch_name=self.state.pr_branch)
+        print(f"Checked out to branch: {self.state.pr_branch}")
+        return self.state.pr_branch
     
     @listen(get_pr_diff)
     def bug_detection(self):
@@ -113,8 +124,8 @@ def main(inputs=None):
     flow = BugDetectionFlow()
     # Inputs will be assigned to the flow state by CrewAI
     flow.kickoff(inputs=inputs)
-    flow.plot("bug_detection_flow")
-    print("Flow visualization saved to bug_detection_flow.html")
+    #flow.plot("bug_detection_flow")
+    #print("Flow visualization saved to bug_detection_flow.html")
 
 if __name__ == "__main__":
     main()

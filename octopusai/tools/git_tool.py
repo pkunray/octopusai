@@ -26,12 +26,11 @@ class Diff(BaseTool):
     name: str = "Git Diff Tool"
     description: str = "Generates a diff of the changes in the cloned repository."
 
-    def _run(self, repo_dir: str, pr_number: int, base_branch: str = "main", incremental: bool = False) -> str:
+    def _run(self, repo_dir: str, pr_number: int, pr_branch: str, base_branch: str = "main", incremental: bool = False) -> str:
         """
         Generate a diff of the changes in the cloned repository.
 
         """
-        pr_branch = f"pr-{pr_number}"
         remote_name = "origin"
         try:
             # Go to repo
@@ -48,3 +47,18 @@ class Diff(BaseTool):
             return diff
         except Exception as e:
             return f"Error generating diff: {str(e)}"
+
+class Checkout(BaseTool):
+    name: str = "Git Checkout Tool"
+    description: str = "Checks out a specific branch in the cloned repository."
+
+    def _run(self, repo_dir: str, branch_name: str) -> str:
+        """
+        Check out a specific branch in the cloned repository.
+        """
+        try:
+            repo = git.Repo(repo_dir)
+            repo.git.checkout(branch_name)
+            return f"Checked out to branch: {branch_name}"
+        except Exception as e:
+            return f"Error checking out branch: {str(e)}"
