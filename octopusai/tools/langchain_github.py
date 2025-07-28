@@ -37,3 +37,18 @@ class ListPullRequestFiles(BaseTool):
     def _run(self, repo: str, pr_number: int) -> str:
         gh = GitHubAPIWrapper(github_repository=repo)
         return gh.list_pull_request_files(pr_number)
+
+class CreatePullRequestInput(BaseModel):
+    repo: str = Field(..., description="owner/repo string")
+    pr_query: str = Field(..., description="Pull request query")
+    src_branch: str = Field(..., description="Source branch for the pull request")
+    dest_branch: str = Field(..., description="Destination branch for the pull request")
+
+class CreatePullRequest(BaseTool):
+    name: str = "Create Pull Request"
+    description: str = "Create a pull request in a GitHub repository."
+    args_schema: Type[BaseModel] = CreatePullRequestInput
+
+    def _run(self, repo: str, pr_query: str, src_branch: str, dest_branch: str) -> str:
+        gh = GitHubAPIWrapper(github_repository=repo, active_branch=src_branch, github_base_branch=dest_branch)
+        return gh.create_pull_request(pr_query=pr_query)

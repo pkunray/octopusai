@@ -1,7 +1,7 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import DirectoryReadTool, FileReadTool
-from tools.git_clone import git_clone_tool
+from octopusai.tools.git_tool import git_clone_tool
 from datetime import datetime
 
 @CrewBase
