@@ -1,5 +1,7 @@
 import click
 import octopusai.crews.bug_detection_flow as bug_detection_flow
+from crewai_tools import MCPServerAdapter
+import octopusai.crews.bug_detection_flow as bug_detection_flow
 
 @click.command("bug")
 @click.argument("repo")
@@ -17,4 +19,5 @@ def bug_detection(ctx: click.Context, repo: str, pr_number: str, active_branch: 
         "requirement_id": requirement_id,
     }
     click.echo(f"Inputs: {inputs}")
-    bug_detection_flow.main(inputs=inputs)
+    with MCPServerAdapter(bug_detection_flow.BugDetectionFlow.mcp_server_params) as mcp_tools:
+        bug_detection_flow.main(inputs=inputs, mcp_tools=mcp_tools)

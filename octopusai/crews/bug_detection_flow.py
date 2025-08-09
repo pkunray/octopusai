@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import json
 import octopusai.tools.langchain_github as langchain_gh
 import octopusai.tools.git_tool as git_tool
+from crewai_tools import MCPServerAdapter
 
 class FlowState(BaseModel):
     """State model"""
@@ -26,6 +27,13 @@ class BugDetectionFlow(Flow[FlowState]):
     A Predifined Workflow utilizing CrewAI's Flow with Crew.
     Which can be integrated into CI/CD pipelines built with commonly adopted tools like Jenkins or GitHub Actions.
     """
+
+    mcp_server_params = {
+        "url": "http://localhost:8000/mcp", 
+        "transport": "streamable-http"
+    }
+    get_prd_tool = None
+
     @start()
     def initialize(self):
         print("Initializing Bug Detection Flow...")
@@ -78,6 +86,15 @@ class BugDetectionFlow(Flow[FlowState]):
     @listen(get_pr_diff)
     def bug_detection(self):
 
+        reviewer_tools = [
+            DirectoryReadTool(),
+            FileReadTool(), 
+        ]
+        if self.get_prd_tool:
+            reviewer_tools.append(self.get_prd_tool)
+
+        print("Reviewer tools:", reviewer_tools)
+    
         # Agents
         code_reviewer = Agent(
             role="Senior Code Reviewer",
@@ -87,12 +104,10 @@ class BugDetectionFlow(Flow[FlowState]):
             backstory="""
             You are a senior code reviewer with more than 10 years of experience in identifying bugs and improving code quality.
             Your specialty is white-box testing, you are also proficient in Python.
+            Your are good at understanding the product requirement documents and how the code should work.
             Your mission is to ensure the highest quality standards in the codebase.
             """,
-            tools=[
-                DirectoryReadTool(),
-                FileReadTool(),
-            ],
+            tools=reviewer_tools,
             verbose=True,
             llm="gpt-4o",
             allow_code_execution=True,
@@ -140,15 +155,18 @@ class BugDetectionFlow(Flow[FlowState]):
             ],
             verbose=True,
             cache=False,
-            max_iter=5,
+            max_iter=10,
             allow_code_execution=True,
             code_execution_mode="safe", 
+            #allow_delegation=True, 
         )
 
         # Tasks
         code_review = Task(
             description=f"""Review the pull request #{self.state.pr_number} in the repository 
             located in {self.state.repo_dir} for bugs and code quality issues.
+            Your should refer to the product requirement document if available, to make sure the code changes are aligned with the requirements.
+            The product requirement document is available in the tool {self.get_prd_tool.name}, you should understand that the only required field of this tool is requirement_id {self.state.requirement_id}.
             The PR diff is as follows:\n{self.state.pr_diff}\nDeep dive into the diff and only check the code changes made in this PR.
             Run the code in a safe environment to make sure your findings are accurate.
             Provide a detailed report of the findings, including explanations for each identified issue.
@@ -176,7 +194,7 @@ class BugDetectionFlow(Flow[FlowState]):
         code_fix_patch = Task(
             description=f"""Apply the generated patch to the repository located in {self.state.repo_dir}.
             Ensure that the patch is applied correctly and does not introduce any new issues.
-            """,
+            """, # If the patch is not applicable, you should inform python_developer agent to regenerate the patch.
             expected_output="Patch applied successfully.",
             agent=git_specialist,
             context=[code_fix_generation],
@@ -197,6 +215,7 @@ class BugDetectionFlow(Flow[FlowState]):
             """,
             expected_output="Changes committed and pushed successfully.",
             agent=git_specialist,
+
             context=[commit_message_generation],
         )
 
@@ -241,12 +260,16 @@ class BugDetectionFlow(Flow[FlowState]):
         print(f"State: {json.dumps(self.state.model_dump(), indent=2)}")
         return pr_response
 
-def main(inputs=None):
+def main(inputs=None, mcp_tools=None):
     flow = BugDetectionFlow()
+    print("mcp_tools:", mcp_tools)
+    if mcp_tools:
+        flow.get_prd_tool = mcp_tools["get_prd"]
     # Inputs will be assigned to the flow state by CrewAI
     flow.kickoff(inputs=inputs)
-    #flow.plot("bug_detection_flow")
-    #print("Flow visualization saved to bug_detection_flow.html")
+    flow.plot("bug_detection_flow")
+    print("Flow visualization saved to bug_detection_flow.html")
 
 if __name__ == "__main__":
-    main()
+    with MCPServerAdapter(BugDetectionFlow.mcp_server_params) as mcp_tools:
+        main(mcp_tools=mcp_tools)       
