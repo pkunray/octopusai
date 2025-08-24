@@ -1,6 +1,6 @@
 from crewai import Flow, Agent, Task, Crew, Process
 from crewai.flow.flow import start, listen
-from crewai_tools import DirectoryReadTool, FileReadTool
+from crewai_tools import DirectoryReadTool, FileReadTool, FileWriterTool
 from pydantic import BaseModel
 import json
 import octopusai.tools.langchain_github as langchain_gh
@@ -109,7 +109,7 @@ class BugDetectionFlow(Flow[FlowState]):
             """,
             tools=reviewer_tools,
             verbose=True,
-            llm="gpt-4o",
+            llm="gpt-3.5-turbo",
             allow_code_execution=True,
             code_execution_mode="safe", # Use Docker
             cache=False,
@@ -129,6 +129,7 @@ class BugDetectionFlow(Flow[FlowState]):
             tools=[
                 DirectoryReadTool(),
                 FileReadTool(),
+                FileWriterTool(),
             ],
             verbose=True,
             llm="gpt-4o",
@@ -180,11 +181,8 @@ class BugDetectionFlow(Flow[FlowState]):
             description=f"""Based on the code review results, generate fixes for the identified bugs and code quality issues.
             Implement the fixes in the repository located in {self.state.repo_dir}.
             Ensure that the fixes are well-tested and maintain the code quality standards.
-            Only output unified diff:
-                - Use `--- a/<path>` and `+++ b/<path>` headers
-                - Use @@ -old_start,old_len +new_start,new_len @@ for each modified block
-                - Suppress other text output
-            Inorder to generate a working patch that can be applied to the codebase, you can execute the command in a safe environment.
+            When you write the code to the file, you should preserve the original file structure and only modify the lines that need fixing, 
+            especially be careful with indentation and line breaks.
             """,
             expected_output="A unified diff patch with the fixes applied to the codebase.",
             agent=python_developer,
@@ -235,7 +233,7 @@ class BugDetectionFlow(Flow[FlowState]):
             agents=[code_reviewer, python_developer, git_specialist],
             tasks=[code_review, 
                    code_fix_generation, 
-                   code_fix_patch, 
+                    #code_fix_patch, 
                    commit_message_generation, 
                    commit_and_push, 
                    pull_request_query_generation],
