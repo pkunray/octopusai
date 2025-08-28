@@ -16,7 +16,7 @@ class Clone(BaseTool):
         Clone a GitHub repository to a temporary directory.
         """
         try:
-            temp_dir = tempfile.mkdtemp(prefix="octopusai_")
+            temp_dir = tempfile.mkdtemp(prefix="apr_", dir="/Users/kun/tmp/octopusai")
             git.Repo.clone_from(self.repository_url, temp_dir)
             return temp_dir
         except Exception as e:
