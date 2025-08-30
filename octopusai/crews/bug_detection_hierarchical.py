@@ -91,10 +91,12 @@ llm_manager = LLM(
 
 llm_bug_detection_and_repair = LLM(
     model="openai/gpt-4o",
+    temperature=0.1,
 )
 
 llm_qa= LLM(
     model="openai/gpt-4o",
+    temperature=0.1,
 )
 
 llm_git_summary = LLM(
@@ -294,16 +296,16 @@ class BugDetectionFlow(Flow[FlowState]):
             -  **Git Operations**: If bugs are found and any fixes were applied, delegate to Senior Git Specialist to generate a concise, conventional commit message summarizing the changes, and prepare a pull request description.
 
             **QA AND TESTING INSTRUCTIONS:**
-            - You have access to a Python execution environment via CodeInterpreterTool.
             - The quality of tests is crucial. ALWAYS think about edge cases and potential failure points, like empty inputs, boundary values, etc.
             - Everytime you run a code snippet, you MUST analyze the output and report any errors or issues found.
             - You never change the codebase directly, **ALWAYS** ask your manager to delegate the writing code task to the Python Developer.
             - Never save test cases to the repository, ALWAYS run them in the safe code interpreter environment, therefore you cannot import modules from the repository, you must include all necessary code in the code snippet you run.
-            - Never make up test results, ALWAYS run the tests and give fedback based on the actual results.
+            - Never make up test results, ALWAYS run the tests and give feedback along with the code you have changed based on the actual results.
+            - When all the tests pass, you need to distinguish the code is the original code or the fixed code.
 
             **Python Coding Guidelines:**
-            - When writing code to the filesystem, always use the code that has been tested by the QA Engineer.
-            - You have the right to disagree with the Code Reviewer or QA Engineer, but you must in the end have the qa engineer approve the code changes.
+            - When writing code to the filesystem, **ALWAYS** use the code that has been tested by the QA Engineer.
+            - You have the right to disagree with the Code Reviewer or QA Engineer, but you **must** in the end have the qa engineer approve the code changes.
 
             **OUTPUT FORMAT (STRICT)**:
             Return **STRICT JSON ONLY**, no extra text or code fences:
@@ -317,8 +319,10 @@ class BugDetectionFlow(Flow[FlowState]):
                 "workflow_steps_completed": ["review","fix","qa","git"]
             }}
 
-            Keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user. Only terminate your turn when you are sure that the problem is solved.
-
+            **Exist Conditions:**
+            1. Keep going until the user’s query is completely resolved, before ending your turn and yielding back to the user. Only terminate your turn when you are sure that the problem is solved.
+            2. If QA verifies that no bugs are found, you can end the task early by reporting "bugs_found": false and skipping the bug fixing step.
+            3. Whereas if bugs are found, you must ensure that the bugs are fixed and verified by QA before ending the task.
             """,
             expected_output="""
             STRICT JSON ONLY (no code fences, no prose). See fields above.
@@ -377,6 +381,16 @@ class BugDetectionFlow(Flow[FlowState]):
         print(f"{'*' * 30 } Crew Token Usage {'*' * 30 }")
         print(result.token_usage)
 
+        print(f"{'>' * 30 } Important Statistics {'>' * 30 }")
+        print(f"Code Fix Branch: {self.state.pr_local_branch}")
+        print(f"Crew Elapsed Time (ms): {elapsed_ms:.3f}")
+        print(f"Total Tokens: {result.token_usage.total_tokens}")
+        print(f"Input Tokens: {result.token_usage.prompt_tokens}")
+        print(f"Cached Tokens: {result.token_usage.cached_prompt_tokens}")
+        print(f"Output Tokens: {result.token_usage.completion_tokens}")
+        print(f"Successful Requests: {result.token_usage.successful_requests}")
+        print(f"{'<' * 30 } Important Statistics {'<' * 30 }")
+
         if model.bugs_found:
             return "Bugs found"
         return "No bugs found"
@@ -409,7 +423,6 @@ class BugDetectionFlow(Flow[FlowState]):
                 print("Some tests failed.")
         else:
             print("No bugs found or fixed files.")
-
 
 
 def to_test_path(path: str) -> str:
