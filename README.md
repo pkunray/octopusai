@@ -22,3 +22,7 @@ To run an APR on a sepcific PR using hierarchical multi-agent mode:
    # examle:
    uv run -m octopusai.cli run bug pkunray/pr-based-eval-quixbugs 15 feat-breadth-first-search -m hierarchical
 ```
+
+## Logs
+
+The `logs` folder contains 
