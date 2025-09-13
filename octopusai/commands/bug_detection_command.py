@@ -23,8 +23,10 @@ def bug_detection(ctx: click.Context, repo: str, pr_number: str, active_branch: 
     click.echo(f"Inputs: {inputs}")
 
     if mode == "sequential":
-        with MCPServerAdapter(sequential.BugDetectionFlow.mcp_server_params) as mcp_tools:
-            sequential.main(inputs=inputs, mcp_tools=mcp_tools)
+        #with MCPServerAdapter(sequential.BugDetectionFlow.mcp_server_params) as mcp_tools:
+            #sequential.main(inputs=inputs, mcp_tools=mcp_tools)
+            sequential.main(inputs=inputs)
     else:
-        with MCPServerAdapter(hierarchical.BugDetectionFlow.mcp_server_params) as mcp_tools:
-            hierarchical.main(inputs=inputs, mcp_tools=mcp_tools)
+        #with MCPServerAdapter(hierarchical.BugDetectionFlow.mcp_server_params) as mcp_tools:
+            #hierarchical.main(inputs=inputs, mcp_tools=mcp_tools)
+            hierarchical.main(inputs=inputs)
