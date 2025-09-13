@@ -1,6 +1,4 @@
-from crewai import Flow, Agent, Task, Crew, Process, LLM
-from crewai.tasks.conditional_task import ConditionalTask
-from crewai.tasks.task_output import TaskOutput
+from crewai import Flow, Agent, Task, Crew, Process
 from crewai.flow.flow import start, listen
 from crewai_tools import DirectoryReadTool, FileReadTool, FileWriterTool
 from pydantic import BaseModel
@@ -21,12 +19,8 @@ class FlowState(BaseModel):
     pr_diff: str | None = None
     pr_local_branch: str | None = None
     pull_request_query: str | None = None
-    bug_present: bool = False
+    #code_fix_patch: str | None = None
 
-gpt3_5 = LLM(
-    model="openai/gpt-3.5-turbo",
-    temperature=0.0,
-)
 
 class BugDetectionFlow(Flow[FlowState]):
     """
@@ -77,6 +71,9 @@ class BugDetectionFlow(Flow[FlowState]):
         print(f"{'<' * 30 } Diff {'<' * 30 }")
         self.state.pr_diff = diff
         return diff
+    
+    #### @listen(clone_repository)
+    #### def get_repo_languages(self):
 
     @listen(clone_repository)
     def checkout_pr(self):
@@ -86,19 +83,6 @@ class BugDetectionFlow(Flow[FlowState]):
         print(f"Checked out to branch: {self.state.pr_local_branch}")
         return self.state.pr_local_branch
     
-    def _on_review_task_complete(self, output: TaskOutput):
-        """Callback function to process task completion"""
-        try:
-            result = json.loads(output.raw)
-            if "hypotheses" in result and len(result["hypotheses"]) > 0:
-                self.state.bug_present = True
-                print("Bugs detected and bug_present set to True")
-            else:
-                self.state.bug_present = False
-                print("No bugs detected, bug_present remains False")
-        except json.JSONDecodeError:
-            print("Failed to parse code review output, by default bug_present is False")
-
     @listen(get_pr_diff)
     def bug_detection(self):
 
@@ -106,33 +90,41 @@ class BugDetectionFlow(Flow[FlowState]):
             DirectoryReadTool(),
             FileReadTool(), 
         ]
-        #if self.get_prd_tool:
-            #reviewer_tools.append(self.get_prd_tool)
+        if self.get_prd_tool:
+            reviewer_tools.append(self.get_prd_tool)
+
+        print("Reviewer tools:", reviewer_tools)
     
         # Agents
         code_reviewer = Agent(
             role="Senior Code Reviewer",
             goal="""
-            - Review pull requests to detect bugs. 
-            - Acting as the last line of defense against bugs, other issues like code style, code quality, naming, lacking documentation, lacking tests etc. are not your concerns, 
-            only focus on the core logic of the functionality.
+            - Review pull requests for logic errors, edge cases, and code quality issues.
             """,
             backstory="""
-            You are a senior code reviewer with more than 10 years of experience in identifying bugs.
+            You are a senior code reviewer with more than 10 years of experience in identifying bugs and improving code quality.
             Your specialty is white-box testing, you are also proficient in Python.
+            Your are good at understanding the product requirement documents and how the code should work.
+            Your mission is to ensure the highest quality standards in the codebase.
             """,
             tools=reviewer_tools,
             verbose=True,
-            llm=gpt3_5,
-            cache=True, #Cache for tool usage,
-            allow_delegation=True, 
+            llm="gpt-3.5-turbo",
+            allow_code_execution=True,
+            code_execution_mode="safe", # Use Docker
+            cache=False,
         )
 
         python_developer = Agent(
             role="Senior Python Developer",
-            goal=""" Fix bugs reported in the code review for the codebase. """,
+            goal="""
+            - Develop high-quality Python code and fix bugs reported in the code review for the codebase.
+            - Compile proper commit messages, pull request queries and other necessary information for the code changes.
+            """,
             backstory="""
-            You are a senior Python developer with more than 10 years of experience in Python development.
+            You are a senior Python developer with more than 8 years of experience in building scalable applications.
+            Your specialty is backend development, and you are proficient in Python and related frameworks.
+            Your mission is to deliver high-quality code that meets the project's requirements.
             """,
             tools=[
                 DirectoryReadTool(),
@@ -140,36 +132,13 @@ class BugDetectionFlow(Flow[FlowState]):
                 FileWriterTool(),
             ],
             verbose=True,
-            llm=gpt3_5,
+            llm="gpt-4o",
             allow_code_execution=True,
-            code_execution_mode="safe",
+            code_execution_mode="safe", # Use Docker
             cache=False,
             max_retry_limit=3,
-            allow_delegation=True, 
+            #allow_delegation=True, 
         )
-
-        qa_engineer = Agent(
-            role="Senior QA Engineer",
-            goal="""
-            - Ensure the quality of the codebase by writing and executing tests.
-            - Identify and report bugs found during testing.
-            """,
-            backstory="""
-            You are a QA engineer with more than 5 years of experience in software testing.
-            Your specialty is automated testing, and you are proficient in Python.
-            """,
-            tools=[
-                DirectoryReadTool(),
-                FileReadTool(),
-            ],
-            verbose=True,
-            llm=gpt3_5,
-            allow_code_execution=True,
-            code_execution_mode="safe",
-            max_retry_limit=3,
-            allow_delegation=True, 
-        )
-
         git_specialist = Agent(
             role="Git Specialist",
             goal="""
@@ -180,87 +149,100 @@ class BugDetectionFlow(Flow[FlowState]):
             Your mission is to ensure smooth Git operations and assist the team in managing code changes effectively.
             """,
             tools=[
+                git_tool.PatchApply(),
                 git_tool.Commit(),
                 git_tool.Push(),
                 langchain_gh.CreatePullRequest(),
             ],
             verbose=True,
             cache=False,
-            max_iter=5,
-            allow_delegation=False, 
+            max_iter=10,
+            allow_code_execution=True,
+            code_execution_mode="safe", 
+            #allow_delegation=True, 
         )
+
         # Tasks
         code_review = Task(
             description=f"""Review the pull request #{self.state.pr_number} in the repository 
-            located in {self.state.repo_dir}, propose specific bug hypotheses.\n
-            The PR diff is as follows:\n{self.state.pr_diff}\n
+            located in {self.state.repo_dir} for bugs and code quality issues.
+            Your should refer to the product requirement document if available, to make sure the code changes are aligned with the requirements.
+            The product requirement document is available in the tool {self.get_prd_tool.name}, you should understand that the only required field of this tool is requirement_id {self.state.requirement_id}.
+            The PR diff is as follows:\n{self.state.pr_diff}\nDeep dive into the diff and only check the code changes made in this PR.
+            Run the code in a safe environment to make sure your findings are accurate.
+            Provide a detailed report of the findings, including explanations for each identified issue.
             """,
-            expected_output='{"hypotheses":[{"file":"a/foo.py","problematic_code":"...","why":"..."}]}',
+            expected_output="A list of identified bugs and code quality issues with explanations in markdown format.",
             agent=code_reviewer,
-            callback=self._on_review_task_complete
+            human_input=True,
         )
 
-
-        code_fix_generation = ConditionalTask(
-            description=f"""Based on the code review results, generate fixes for the identified bugs.
-            When writing the code to the file, preserve the original file structure and only modify the lines that need fixing, 
-            especially be careful with indentation and line breaks in Python.
+        code_fix_generation = Task(
+            description=f"""Based on the code review results, generate fixes for the identified bugs and code quality issues.
+            Implement the fixes in the repository located in {self.state.repo_dir}.
+            Ensure that the fixes are well-tested and maintain the code quality standards.
+            When you write the code to the file, you should preserve the original file structure and only modify the lines that need fixing, 
+            especially be careful with indentation and line breaks.
             """,
-            expected_output='{"files_modified":["a/foo.py"],"note":"what changed and why"}',
+            expected_output="A unified diff patch with the fixes applied to the codebase.",
             agent=python_developer,
             context=[code_review],
-            condition=lambda x: self.state.bug_present  # Only run if bugs are present
+            human_input=True
         )
-        commit_message_generation = ConditionalTask(
-            description=f"""Generate a commit message for the code fix.
+        code_fix_patch = Task(
+            description=f"""Apply the generated patch to the repository located in {self.state.repo_dir}.
+            Ensure that the patch is applied correctly and does not introduce any new issues.
+            """, # If the patch is not applicable, you should inform python_developer agent to regenerate the patch.
+            expected_output="Patch applied successfully.",
+            agent=git_specialist,
+            context=[code_fix_generation],
+
+        )
+        commit_message_generation = Task(
+            description=f"""Generate a commit message for the applied patch.
             Ensure that the commit message follows the conventional commit format with 'fix: ' prefix, and describes the changes made, other than just "fixes bugs".
             """,
             expected_output="A pure commit message in conventional commit format.",
             agent=python_developer,
             context=[code_fix_generation],
-            condition=lambda x: self.state.bug_present,
+            human_input=True
         )
-        commit_and_push = ConditionalTask(
+        commit_and_push = Task(
             description=f"""Commit the changes in the repository located in {self.state.repo_dir} with the generated commit message.
             Ensure that the commit is made to branch of {self.state.pr_local_branch} and pushed to the remote repository.
             """,
-            expected_output='{"commit_and_push_status":"success/false"}',
+            expected_output="Changes committed and pushed successfully.",
             agent=git_specialist,
+
             context=[commit_message_generation],
-            condition=lambda x: self.state.bug_present,
         )
 
-        pull_request_query_generation = ConditionalTask(
+        pull_request_query_generation = Task(
             description=f"""Generate a pull request query including title, body according to the changes made in the repository located in {self.state.repo_dir}.
-            Refer to the code changes made in the code fix and the commit message for context.
+            Refer to the code changes made in the patch and the commit message for context.
             """,
-            expected_output="Fix: ...\n" \
-            "The PR addresses the following issues:\n" \
-            "1. ...\n" \
-            "2. ...\n",
+            expected_output="A pull request query string including title, body and other necessary information. " \
+            "The title and body is separated by a newline character." \
+            "Don't explicitly mentiong which part is title and which part is body, just output the query string.",
             agent=python_developer,
-            context=[code_fix_generation, commit_message_generation],
-            human_input=True,
-            condition=lambda x: self.state.bug_present,
+            context=[code_fix_patch, commit_and_push, commit_message_generation],
+            human_input=True
         )
 
         crew = Crew(
-            agents=[code_reviewer, python_developer, qa_engineer, git_specialist],
+            agents=[code_reviewer, python_developer, git_specialist],
             tasks=[code_review, 
                    code_fix_generation, 
+                    #code_fix_patch, 
                    commit_message_generation, 
                    commit_and_push, 
                    pull_request_query_generation],
-            process=Process.sequential, # For hierarchical, a manager agent or manager llm must be specified
-            #manager_llm="gpt-4o",
+            process=Process.sequential,
             verbose=True,
             cache=False,
-            share_crew=True,
-            #planning=True
         )
         result = crew.kickoff()
-        if pull_request_query_generation.output:
-            self.state.pull_request_query = pull_request_query_generation.output.raw
+        self.state.pull_request_query = pull_request_query_generation.output.raw
         print(result.token_usage)
         return result.raw
     
@@ -283,6 +265,8 @@ def main(inputs=None, mcp_tools=None):
         flow.get_prd_tool = mcp_tools["get_prd"]
     # Inputs will be assigned to the flow state by CrewAI
     flow.kickoff(inputs=inputs)
+    flow.plot("bug_detection_flow")
+    print("Flow visualization saved to bug_detection_flow.html")
 
 if __name__ == "__main__":
     with MCPServerAdapter(BugDetectionFlow.mcp_server_params) as mcp_tools:
