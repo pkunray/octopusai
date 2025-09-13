@@ -25,4 +25,4 @@ To run an APR on a sepcific PR using hierarchical multi-agent mode:
 
 ## Logs
 
-The `logs` folder contains 
+The `logs` folder contains execution logs of 90 runs, for validation.
